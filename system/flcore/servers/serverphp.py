@@ -17,8 +17,8 @@
 
 import time
 import torch
-from flcore.clients.clientphp import clientPHP
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientphp import clientPHP
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

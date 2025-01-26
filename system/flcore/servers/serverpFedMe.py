@@ -19,8 +19,8 @@ import os
 import time
 import copy
 import h5py
-from flcore.clients.clientpFedMe import clientpFedMe
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientpFedMe import clientpFedMe
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

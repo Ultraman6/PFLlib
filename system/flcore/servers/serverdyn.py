@@ -18,8 +18,8 @@
 import copy
 import time
 import torch
-from flcore.clients.clientdyn import clientDyn
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientdyn import clientDyn
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

@@ -20,7 +20,7 @@ import torch
 import numpy as np
 import time
 import torch.nn.functional as F
-from flcore.clients.clientbase import Client
+from system.flcore.clients.clientbase import Client
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 

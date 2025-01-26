@@ -1,4 +1,4 @@
-# PFLlib: Personalized Federated Learning Algorithm Library
+d# PFLlib: Personalized Federated Learning Algorithm Library
 # Copyright (C) 2021  Jianqing Zhang
 
 # This program is free software; you can redistribute it and/or modify
@@ -17,9 +17,9 @@
 
 import numpy as np
 import time
-from flcore.clients.clientbase import Client
-from utils.data_utils import read_client_data
-from utils.ALA import ALA
+from system.flcore.clients.clientbase import Client
+from system.utils.data_utils import read_client_data
+from system.utils.ALA import ALA
 
 
 class clientALA(Client):

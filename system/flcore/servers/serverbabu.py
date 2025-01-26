@@ -17,8 +17,8 @@
 
 import time
 import random
-from flcore.clients.clientbabu import clientBABU
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientbabu import clientBABU
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

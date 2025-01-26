@@ -18,8 +18,8 @@
 import copy
 import random
 import time
-from flcore.clients.clientfml import clientFML
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientfml import clientFML
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

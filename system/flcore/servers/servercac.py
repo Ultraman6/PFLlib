@@ -3,8 +3,8 @@ import torch
 import copy
 
 
-from flcore.clients.clientcac import clientCAC
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientcac import clientCAC
+from system.flcore.servers.serverbase import Server
 
 class FedCAC(Server):
     def __init__(self, args, times):

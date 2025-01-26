@@ -17,8 +17,8 @@
 
 import random
 import time
-from flcore.clients.clientrep import clientRep
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientrep import clientRep
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

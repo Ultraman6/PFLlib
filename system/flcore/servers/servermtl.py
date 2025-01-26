@@ -17,8 +17,8 @@
 
 import time
 import torch
-from flcore.clients.clientmtl import clientMTL
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientmtl import clientMTL
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

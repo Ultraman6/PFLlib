@@ -16,8 +16,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import time
-from flcore.clients.clientapfl import clientAPFL
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientapfl import clientAPFL
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

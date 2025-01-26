@@ -18,8 +18,8 @@
 import time
 import torch
 import torch.nn as nn
-from flcore.clients.clientlc import clientLC
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientlc import clientLC
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

@@ -21,8 +21,8 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from flcore.clients.clientgc import clientGC
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientgc import clientGC
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 from collections import defaultdict
 

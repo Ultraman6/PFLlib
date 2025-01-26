@@ -22,8 +22,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from flcore.clients.clientgen import clientGen
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientgen import clientGen
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

@@ -18,9 +18,9 @@
 import copy
 import torch
 import time
-from flcore.clients.clientcp import *
-from flcore.servers.serverbase import Server
-from utils.data_utils import read_client_data
+from system.flcore.clients.clientcp import *
+from system.flcore.servers.serverbase import Server
+from system.utils.data_utils import read_client_data
 from threading import Thread
 
 

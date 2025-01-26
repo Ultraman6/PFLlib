@@ -18,7 +18,7 @@
 import torch
 import numpy as np
 import time
-from flcore.clients.clientbase import Client
+from system.flcore.clients.clientbase import Client
 
 
 class clientRep(Client):

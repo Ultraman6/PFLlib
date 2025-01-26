@@ -19,8 +19,8 @@ import copy
 import torch
 import torch.nn as nn
 import time
-from flcore.clients.clientgpfl import *
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientgpfl import *
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

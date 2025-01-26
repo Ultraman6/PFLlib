@@ -18,8 +18,8 @@
 import copy
 import time
 import numpy as np
-from flcore.clients.clientperavg import clientPerAvg
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientperavg import clientPerAvg
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

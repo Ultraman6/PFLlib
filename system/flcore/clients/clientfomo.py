@@ -19,7 +19,7 @@ import torch
 import numpy as np
 import time
 import copy
-from flcore.clients.clientbase import Client
+from system.flcore.clients.clientbase import Client
 from torch.utils.data import DataLoader
 from utils.data_utils import read_client_data
 

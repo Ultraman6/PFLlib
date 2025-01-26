@@ -17,11 +17,11 @@
 
 import torch
 import time
-from flcore.clients.clientapple import clientAPPLE
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientapple import clientAPPLE
+from system.flcore.servers.serverbase import Server
 from threading import Thread
-from utils.dlg import DLG
-from utils.data_utils import read_client_data
+from system.utils.dlg import DLG
+from system.utils.data_utils import read_client_data
 
 
 class APPLE(Server):

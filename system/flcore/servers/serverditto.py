@@ -17,8 +17,8 @@
 
 import numpy as np
 import time
-from flcore.clients.clientditto import clientDitto
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientditto import clientDitto
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

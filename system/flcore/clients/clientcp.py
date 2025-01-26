@@ -22,7 +22,7 @@ import numpy as np
 import torch.nn.functional as F
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
-from flcore.clients.clientbase import Client
+from system.flcore.clients.clientbase import Client
 
 
 class clientCP(Client):

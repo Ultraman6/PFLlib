@@ -20,10 +20,10 @@ import time
 import copy
 import random
 import numpy as np
-from flcore.clients.clientfomo import clientFomo
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientfomo import clientFomo
+from system.flcore.servers.serverbase import Server
 from threading import Thread
-from utils.dlg import DLG
+from system.utils.dlg import DLG
 
 
 class FedFomo(Server):

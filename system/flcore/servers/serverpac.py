@@ -21,8 +21,8 @@ import random
 import torch
 import cvxpy as cvx
 import copy
-from flcore.clients.clientpac import clientPAC
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientpac import clientPAC
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 from collections import defaultdict
 

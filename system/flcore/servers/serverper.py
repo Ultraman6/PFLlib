@@ -17,8 +17,8 @@
 
 import random
 import time
-from flcore.clients.clientper import clientPer
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientper import clientPer
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 
 

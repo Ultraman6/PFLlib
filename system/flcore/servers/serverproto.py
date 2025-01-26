@@ -17,8 +17,8 @@
 
 import time
 import numpy as np
-from flcore.clients.clientproto import clientProto
-from flcore.servers.serverbase import Server
+from system.flcore.clients.clientproto import clientProto
+from system.flcore.servers.serverbase import Server
 from threading import Thread
 from collections import defaultdict
 

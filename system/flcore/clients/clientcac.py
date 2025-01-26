@@ -3,7 +3,7 @@ import time
 import torch
 import torch.nn as nn
 import copy
-from flcore.clients.clientbase import Client
+from system.flcore.clients.clientbase import Client
 
 class clientCAC(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):

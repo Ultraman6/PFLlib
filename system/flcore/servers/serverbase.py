@@ -155,6 +155,14 @@ class Server(object):
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         torch.save(self.global_model, model_path)
 
+    def save_local_models(self):
+        model_path = os.path.join("models", self.dataset)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        for client in self.clients:
+            model_path = os.path.join(model_path, self.algorithm + "_client_" + str(client.id) + ".pt")
+            torch.save(client.model, str(model_path))
+
     def load_model(self):
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")

@@ -1,5 +1,3 @@
-import copy
-import torch
 import numpy as np
 import time
 from flcore.clients.clientbase import Client

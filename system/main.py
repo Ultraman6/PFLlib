@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import copy
-import torch
+import torch.nn as nn
 import argparse
 import os
 import time
@@ -8,46 +8,18 @@ import warnings
 import numpy as np
 import torchvision
 import logging
-
-from flcore.servers.serveravg import FedAvg
-from flcore.servers.serverpFedMe import pFedMe
-from flcore.servers.serverperavg import PerAvg
-from flcore.servers.serverprox import FedProx
-from flcore.servers.serverfomo import FedFomo
-from flcore.servers.serveramp import FedAMP
-from flcore.servers.servermtl import FedMTL
 from flcore.servers.serverlocal import Local
+from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverper import FedPer
-from flcore.servers.serverapfl import APFL
-from flcore.servers.serverditto import Ditto
-from flcore.servers.serverrep import FedRep
-from flcore.servers.serverphp import FedPHP
 from flcore.servers.serverbn import FedBN
-from flcore.servers.serverrod import FedROD
 from flcore.servers.serverproto import FedProto
-from flcore.servers.serverdyn import FedDyn
-from flcore.servers.servermoon import MOON
-from flcore.servers.serverbabu import FedBABU
-from flcore.servers.serverapple import APPLE
 from flcore.servers.servergen import FedGen
-from flcore.servers.serverscaffold import SCAFFOLD
-from flcore.servers.serverfd import FD
-from flcore.servers.serverala import FedALA
 from flcore.servers.serverpac import FedPAC
-from flcore.servers.serverlg import LG_FedAvg
 from flcore.servers.servergc import FedGC
-from flcore.servers.serverfml import FML
-from flcore.servers.serverkd import FedKD
 from flcore.servers.serverpcl import FedPCL
-from flcore.servers.servercp import FedCP
 from flcore.servers.servergpfl import GPFL
-from flcore.servers.serverntd import FedNTD
 from flcore.servers.servergh import FedGH
-from flcore.servers.serverdbe import FedDBE
 from flcore.servers.servercac import FedCAC
-from flcore.servers.serverda import PFL_DA
-from flcore.servers.serverlc import FedLC
-from flcore.servers.serveras import FedAS
 
 from flcore.trainmodel.models import *
 
@@ -56,6 +28,7 @@ from flcore.trainmodel.resnet import *
 from flcore.trainmodel.alexnet import *
 from flcore.trainmodel.mobilenet_v2 import *
 from flcore.trainmodel.transformer import *
+from system.flcore.servers.servernh import FedNH
 
 from utils.result_utils import average_data
 from utils.mem_utils import MemReporter
@@ -92,9 +65,9 @@ def run(args):
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=1024).to(args.device)
             elif "Cifar10" in args.dataset:
                 args.model = FedAvgCNN(in_features=3, num_classes=args.num_classes, dim=1600).to(args.device)
+                # args.model = CifarNet(num_classes=args.num_classes).to(args.device)
             elif "Omniglot" in args.dataset:
                 args.model = FedAvgCNN(in_features=1, num_classes=args.num_classes, dim=33856).to(args.device)
-                # args.model = CifarNet(num_classes=args.num_classes).to(args.device)
             elif "Digit5" in args.dataset:
                 args.model = Digit5CNN().to(args.device)
             else:
@@ -191,56 +164,14 @@ def run(args):
         elif args.algorithm == "Local":
             server = Local(args, i)
 
-        elif args.algorithm == "FedMTL":
-            server = FedMTL(args, i)
-
-        elif args.algorithm == "PerAvg":
-            server = PerAvg(args, i)
-
-        elif args.algorithm == "pFedMe":
-            server = pFedMe(args, i)
-
-        elif args.algorithm == "FedProx":
-            server = FedProx(args, i)
-
-        elif args.algorithm == "FedFomo":
-            server = FedFomo(args, i)
-
-        elif args.algorithm == "FedAMP":
-            server = FedAMP(args, i)
-
-        elif args.algorithm == "APFL":
-            server = APFL(args, i)
-
         elif args.algorithm == "FedPer":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedPer(args, i)
 
-        elif args.algorithm == "Ditto":
-            server = Ditto(args, i)
-
-        elif args.algorithm == "FedRep":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedRep(args, i)
-
-        elif args.algorithm == "FedPHP":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPHP(args, i)
-
         elif args.algorithm == "FedBN":
             server = FedBN(args, i)
-
-        elif args.algorithm == "FedROD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedROD(args, i)
 
         elif args.algorithm == "FedProto":
             args.head = copy.deepcopy(args.model.fc)
@@ -248,23 +179,23 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedProto(args, i)
 
-        elif args.algorithm == "FedDyn":
-            server = FedDyn(args, i)
-
-        elif args.algorithm == "MOON":
+        elif args.algorithm == "FedTGP":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
-            server = MOON(args, i)
+            server = FedProto(args, i)
 
-        elif args.algorithm == "FedBABU":
+        elif args.algorithm == "FPL":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
-            server = FedBABU(args, i)
+            server = FedProto(args, i)
 
-        elif args.algorithm == "APPLE":
-            server = APPLE(args, i)
+        elif args.algorithm == "FedNH":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedNH(args, i)
 
         elif args.algorithm == "FedGen":
             args.head = copy.deepcopy(args.model.fc)
@@ -272,26 +203,11 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedGen(args, i)
 
-        elif args.algorithm == "SCAFFOLD":
-            server = SCAFFOLD(args, i)
-
-        elif args.algorithm == "FD":
-            server = FD(args, i)
-
-        elif args.algorithm == "FedALA":
-            server = FedALA(args, i)
-
         elif args.algorithm == "FedPAC":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedPAC(args, i)
-
-        elif args.algorithm == "LG-FedAvg":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = LG_FedAvg(args, i)
 
         elif args.algorithm == "FedGC":
             args.head = copy.deepcopy(args.model.fc)
@@ -299,24 +215,9 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedGC(args, i)
 
-        elif args.algorithm == "FML":
-            server = FML(args, i)
-
-        elif args.algorithm == "FedKD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedKD(args, i)
-
         elif args.algorithm == "FedPCL":
             args.model.fc = nn.Identity()
             server = FedPCL(args, i)
-
-        elif args.algorithm == "FedCP":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedCP(args, i)
 
         elif args.algorithm == "GPFL":
             args.head = copy.deepcopy(args.model.fc)
@@ -324,48 +225,21 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = GPFL(args, i)
 
-        elif args.algorithm == "FedNTD":
-            server = FedNTD(args, i)
-
         elif args.algorithm == "FedGH":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedGH(args, i)
 
-        elif args.algorithm == "FedDBE":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedDBE(args, i)
-
         elif args.algorithm == 'FedCAC':
             server = FedCAC(args, i)
-
-        elif args.algorithm == 'PFL-DA':
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = PFL_DA(args, i)
-
-        elif args.algorithm == 'FedLC':
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedLC(args, i)
-
-        elif args.algorithm == 'FedAS':
-
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedAS(args, i)
             
         else:
             raise NotImplementedError
 
+        print("="*20,"Server and clients created.", "="*20)
+        print(type(server), type(server.clients[0]))
         server.train()
-
         time_list.append(time.time()-start)
 
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
@@ -386,10 +260,10 @@ if __name__ == "__main__":
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
                         help="The goal for this experiment")
-    parser.add_argument('-dev', "--device", type=str, default="cuda",
-                        choices=["cpu", "cuda"])
+    parser.add_argument('-dev', "--device", type=str, default="cpu",
+                        choices=["cpu", "cuda", "mps"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
-    parser.add_argument('-data', "--dataset", type=str, default="MNIST")
+    parser.add_argument('-data', "--dataset", type=str, default="Cifar10")
     parser.add_argument('-ncl', "--num_classes", type=int, default=10)
     parser.add_argument('-m', "--model", type=str, default="CNN")
     parser.add_argument('-lbs', "--batch_size", type=int, default=10)
@@ -402,7 +276,7 @@ if __name__ == "__main__":
                         help="For auto_break")
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedTGP")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
@@ -488,6 +362,11 @@ if __name__ == "__main__":
     parser.add_argument('-mo', "--momentum", type=float, default=0.1)
     parser.add_argument('-klw', "--kl_weight", type=float, default=0.0)
 
+    # FedNH
+    parser.add_argument('-FedNH_server_adv_prototype_agg', type=bool, default=False)
+    parser.add_argument('-FedNH_client_adv_prototype_agg', type=bool, default=False)
+    parser.add_argument('-FedNH_server_lr_decay', type=float, default=1.0)
+    parser.add_argument('-FedNH_smoothing', type=float, default=0.9)
 
     args = parser.parse_args()
 
@@ -497,10 +376,10 @@ if __name__ == "__main__":
         print("\ncuda is not avaiable.\n")
         args.device = "cpu"
 
-    print("=" * 50)
-    for arg in vars(args):
-        print(arg, '=',getattr(args, arg))
-    print("=" * 50)
+    # print("=" * 50)
+    # for arg in vars(args):
+    #     print(arg, '=',getattr(args, arg))
+    # print("=" * 50)
 
     # with torch.profiler.profile(
     #     activities=[

@@ -1,4 +1,5 @@
 import copy
+from collections import Counter
 import torch
 import torch.nn as nn
 import numpy as np
@@ -6,7 +7,7 @@ import os
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
-from utils.data_utils import read_client_data
+from system.utils.data_utils import read_client_data
 
 
 class Client(object):
@@ -26,6 +27,14 @@ class Client(object):
         self.num_classes = args.num_classes
         self.train_samples = train_samples
         self.test_samples = test_samples
+
+        train_labels = [label for _, label in read_client_data(self.dataset, self.id, is_train=True)]
+        test_labels = [label for _, label in read_client_data(self.dataset, self.id, is_train=False)]
+        self.train_samples_by_class = {i: 0 for i in range(self.num_classes)}
+        for label in train_labels: self.train_samples_by_class[label.item()] += 1
+        self.test_samples_by_class = {i:0 for i in range(self.num_classes)}
+        for label in test_labels: self.test_samples_by_class[label.item()] += 1
+
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs

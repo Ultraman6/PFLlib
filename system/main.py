@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import copy
-import torch.nn as nn
 import argparse
 import os
 import time
@@ -20,16 +19,13 @@ from flcore.servers.serverpcl import FedPCL
 from flcore.servers.servergpfl import GPFL
 from flcore.servers.servergh import FedGH
 from flcore.servers.servercac import FedCAC
-
 from flcore.trainmodel.models import *
-
 from flcore.trainmodel.bilstm import *
 from flcore.trainmodel.resnet import *
 from flcore.trainmodel.alexnet import *
 from flcore.trainmodel.mobilenet_v2 import *
 from flcore.trainmodel.transformer import *
-from system.flcore.servers.servernh import FedNH
-
+from flcore.servers.servernh import FedNH
 from utils.result_utils import average_data
 from utils.mem_utils import MemReporter
 
@@ -260,7 +256,7 @@ if __name__ == "__main__":
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
                         help="The goal for this experiment")
-    parser.add_argument('-dev', "--device", type=str, default="cpu",
+    parser.add_argument('-dev', "--device", type=str, default="cuda",
                         choices=["cpu", "cuda", "mps"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="Cifar10")
@@ -276,7 +272,7 @@ if __name__ == "__main__":
                         help="For auto_break")
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedTGP")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
@@ -287,7 +283,7 @@ if __name__ == "__main__":
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
-    parser.add_argument('-eg', "--eval_gap", type=int, default=1,
+    parser.add_argument('-eg', "--eval_gap", type=int, default=10,
                         help="Rounds gap for evaluation")
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
     parser.add_argument('-ab', "--auto_break", type=bool, default=False)

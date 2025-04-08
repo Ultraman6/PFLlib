@@ -7,11 +7,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 
 
-batch_size = 10
-train_ratio = 0.75 # merge original training set and test set, then split it manually. 
-alpha = 0.1 # for Dirichlet distribution. 100 for exdir
-
-def check(config_path, train_path, test_path, num_clients, niid=False, 
+def check(config_path, train_path, test_path, num_clients, alpha, batch_size, niid=False,
         balance=True, partition=None):
     # check existing dataset
     if os.path.exists(config_path):
@@ -35,13 +31,14 @@ def check(config_path, train_path, test_path, num_clients, niid=False,
 
     return False
 
-def separate_data(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=None):
+def separate_data(data, num_clients, num_classes, niid, batch_size, train_ratio, alpha, balance=False, partition=None):
+    global class_per_client
     X = [[] for _ in range(num_clients)]
     y = [[] for _ in range(num_clients)]
     statistic = [[] for _ in range(num_clients)]
 
     dataset_content, dataset_label = data
-    # guarantee that each client must have at least one batch of data for testing. 
+    # guarantee that each client must have at least one batch of data for testing.
     least_samples = int(min(batch_size / (1-train_ratio), len(dataset_label) / num_clients / 2))
 
     dataidx_map = {}
@@ -182,7 +179,6 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
         for j in range(num_clients):
             np.random.shuffle(idx_batch[j])
             dataidx_map[j] = idx_batch[j]
-    
     else:
         raise NotImplementedError
 
@@ -194,11 +190,8 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
 
         for i in np.unique(y[client]):
             statistic[client].append((int(i), int(sum(y[client]==i))))
-            
-
     del data
     # gc.collect()
-
     for client in range(num_clients):
         print(f"Client {client}\t Size of data: {len(X[client])}\t Labels: ", np.unique(y[client]))
         print(f"\t\t Samples of labels: ", [i for i in statistic[client]])
@@ -206,12 +199,12 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
 
     return X, y, statistic
 
-
-def split_data(X, y):
+# 切割数据（训练/测试）
+def split_data(X, y, train_ratio):
     # Split dataset
     train_data, test_data = [], []
     num_samples = {'train':[], 'test':[]}
-
+    # 划分每个客户的训练集和测试集
     for i in range(len(y)):
         X_train, X_test, y_train, y_test = train_test_split(
             X[i], y[i], train_size=train_ratio, shuffle=True)
@@ -231,7 +224,7 @@ def split_data(X, y):
     return train_data, test_data
 
 def save_file(config_path, train_path, test_path, train_data, test_data, num_clients, 
-                num_classes, statistic, niid=False, balance=True, partition=None):
+                num_classes, statistic, alpha, batch_size, niid=False, balance=True, partition=None):
     config = {
         'num_clients': num_clients, 
         'num_classes': num_classes, 

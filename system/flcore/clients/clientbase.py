@@ -7,7 +7,7 @@ import os
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
-from system.utils.data_utils import read_client_data
+from utils.data_utils import read_client_data
 
 
 class Client(object):

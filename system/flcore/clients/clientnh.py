@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import time
-from system.flcore.clients.clientbase import Client
+from flcore.clients.clientbase import Client
 from collections import defaultdict, Counter
 import torch.nn.functional as F
 

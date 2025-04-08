@@ -3,8 +3,8 @@ import time
 import numpy as np
 import torch
 import torch.nn.functional as F
-from system.flcore.clients.clientnh import clientNH
-from system.flcore.servers.serverbase import Server
+from flcore.clients.clientnh import clientNH
+from flcore.servers.serverbase import Server
 from threading import Thread
 from collections import defaultdict
 

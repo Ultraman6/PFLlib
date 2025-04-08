@@ -1,8 +1,13 @@
 import time
+from threading import Thread
+import multiprocessing.dummy as dmp
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-from threading import Thread
+import torch.multiprocessing as mp
+from tqdm import tqdm
 
+def train_step(client: clientAVG):
+    client.train()
 
 class FedAvg(Server):
     def __init__(self, args, times):
@@ -18,8 +23,10 @@ class FedAvg(Server):
         # self.load_model()
         self.Budget = []
 
-
     def train(self):
+        if self.parallel_num > 1:
+            mp.set_start_method('spawn', force=True)
+            pool = mp.Pool(processes=8)
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -30,13 +37,13 @@ class FedAvg(Server):
                 print("\nEvaluate global model")
                 self.evaluate()
 
-            for client in self.selected_clients:
-                client.train()
-
-            # threads = [Thread(target=client.train)
-            #            for client in self.selected_clients]
-            # [t.start() for t in threads]
-            # [t.join() for t in threads]
+            if self.parallel_num > 1:
+                results = [pool.apply_async(train_step, args=(client,)) for client in self.selected_clients]
+                for result in tqdm(results):
+                    result.get()
+            else:
+                for client in self.selected_clients:
+                    client.train()
 
             self.receive_models()
             if self.dlg_eval and i%self.dlg_gap == 0:
@@ -49,6 +56,9 @@ class FedAvg(Server):
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
 
+        if self.parallel_num > 1:
+            pool.close()
+            pool.join()
         print("\nBest accuracy.")
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))

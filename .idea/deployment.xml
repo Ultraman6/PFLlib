@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="XYZ" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+  <component name="PublishConfigData" serverName="WUST_LJF" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
-      <paths name="XYZ">
+      <paths name="WUST_LJF">
         <serverdata>
           <mappings>
-            <mapping deploy="/mnt/d/github/PFLib" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/mnt/d/github/pfllib" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

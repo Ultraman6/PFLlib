@@ -1,6 +1,9 @@
+import time
 import numpy as np
 import os
-from dataset.utils.dataset_utils import split_data, save_file
+import random
+import torchvision.transforms as transforms
+from utils.dataset_utils import split_data, save_file
 from os import path
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -44,29 +47,40 @@ class DomainNet(Dataset):
         return len(self.data_paths)
 
 
-def get_domainnet_dloader(dataset_path, domain_name, transform):
+def get_domainnet_dloader(dataset_path, domain_name):
     train_data_paths, train_data_labels = read_domainnet_data(dataset_path, domain_name, split="train")
     test_data_paths, test_data_labels = read_domainnet_data(dataset_path, domain_name, split="test")
+    transforms_train = transforms.Compose([
+        transforms.RandomResizedCrop(64, scale=(0.75, 1)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor()
+    ])
+    transforms_test = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor()
+    ])
 
-    train_dataset = DomainNet(train_data_paths, train_data_labels, transform, domain_name)
+    train_dataset = DomainNet(train_data_paths, train_data_labels, transforms_train, domain_name)
     train_loader = DataLoader(dataset=train_dataset, batch_size=len(train_dataset), shuffle=False)
-    test_dataset = DomainNet(test_data_paths, test_data_labels, transform, domain_name)
+    test_dataset = DomainNet(test_data_paths, test_data_labels, transforms_test, domain_name)
     test_loader = DataLoader(dataset=test_dataset, batch_size=len(test_dataset), shuffle=False)
     return train_loader, test_loader
 
 
+random.seed(1)
+np.random.seed(1)
 data_path = "DomainNet/"
 dir_path = "DomainNet/"
 
 # Allocate data to users
-def _generate_dataset(args, transform, partitioner):
+def generate_dataset(dir_path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
         
     # Setup directory for train/test data
-    config_path = args.dir_path + "config.json"
-    train_path = args.dir_path + "train/"
-    test_path = args.dir_path + "test/"
+    config_path = dir_path + "config.json"
+    train_path = dir_path + "train/"
+    test_path = dir_path + "test/"
 
     if not os.path.exists(train_path):
         os.makedirs(train_path)
@@ -96,7 +110,7 @@ def _generate_dataset(args, transform, partitioner):
 
     X, y = [], []
     for d in domains:
-        train_loader, test_loader = get_domainnet_dloader(root, d, transform)
+        train_loader, test_loader = get_domainnet_dloader(root, d)
 
         for _, tt in enumerate(train_loader):
             train_data, train_label = tt
@@ -131,7 +145,11 @@ def _generate_dataset(args, transform, partitioner):
         print(f"\t\t Samples of labels: ", [i for i in statistic[client]])
         print("-" * 50)
 
-    train_data, test_data = split_data(X, y, args.train_ratio)
+    train_data, test_data = split_data(X, y)
     # modify the code in YOUR_ENV/lib/python3.8/site-packages/numpy/lib Line #678 from protocol=3 to protocol=4
     save_file(config_path, train_path, test_path, train_data, test_data, num_clients, max(labelss), 
         statistic, None, None, None)
+
+
+if __name__ == "__main__":
+    generate_dataset(dir_path)

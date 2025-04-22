@@ -1,8 +1,17 @@
 import numpy as np
 import os
+import sys
+import random
 import torch
-from dataset.utils.dataset_utils import check, separate_data, split_data, save_file
+import torchvision
+import torchvision.transforms as transforms
+from utils.dataset_utils import check, separate_data, split_data, save_file
 from torchvision.datasets import ImageFolder, DatasetFolder
+
+random.seed(1)
+np.random.seed(1)
+num_clients = 20
+dir_path = "TinyImagenet/"
 
 # https://github.com/QinbinLi/MOON/blob/6c7a4ed1b1a8c0724fa2976292a667a828e3ff5d/datasets.py#L148
 class ImageFolder_custom(DatasetFolder):
@@ -40,8 +49,7 @@ class ImageFolder_custom(DatasetFolder):
 
 
 # Allocate data to users
-def _generate_dataset(args, transform, partitioner):
-    dir_path = os.path.join(args.data_root, 'TinyImagenet')
+def generate_dataset(dir_path, num_clients, niid, balance, partition):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
         
@@ -50,7 +58,7 @@ def _generate_dataset(args, transform, partitioner):
     train_path = dir_path + "train/"
     test_path = dir_path + "test/"
 
-    if check(config_path, train_path, test_path, args.num_clients, args.niid, args.balance, args.partition):
+    if check(config_path, train_path, test_path, num_clients, niid, balance, partition):
         return
 
     # Get data
@@ -60,7 +68,10 @@ def _generate_dataset(args, transform, partitioner):
     else:
         print('rawdata already exists.\n')
 
-    trainset = ImageFolder_custom(root=dir_path+'/rawdata/tiny-imagenet-200/train/', transform=transform)
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    trainset = ImageFolder_custom(root=dir_path+'rawdata/tiny-imagenet-200/train/', transform=transform)
     trainloader = torch.utils.data.DataLoader(
         trainset, batch_size=len(trainset), shuffle=False)
 
@@ -78,8 +89,21 @@ def _generate_dataset(args, transform, partitioner):
     num_classes = len(set(dataset_label))
     print(f'Number of classes: {num_classes}')
 
-    X, y, statistic = separate_data((dataset_image, dataset_label), args.num_clients, num_classes,
-                                    args.niid, args.alpha, args.balance, args.partition)
-    train_data, test_data = split_data(X, y, args.train_ratio)
-    save_file(config_path, train_path, test_path, train_data, test_data, args.num_clients, num_classes,
-        statistic, args.niid, args.balance, args.partition)
+    # dataset = []
+    # for i in range(num_classes):
+    #     idx = dataset_label == i
+    #     dataset.append(dataset_image[idx])
+
+    X, y, statistic = separate_data((dataset_image, dataset_label), num_clients, num_classes, 
+                                    niid, balance, partition, class_per_client=20)
+    train_data, test_data = split_data(X, y)
+    save_file(config_path, train_path, test_path, train_data, test_data, num_clients, num_classes, 
+        statistic, niid, balance, partition)
+
+
+if __name__ == "__main__":
+    niid = True if sys.argv[1] == "noniid" else False
+    balance = True if sys.argv[2] == "balance" else False
+    partition = sys.argv[3] if sys.argv[3] != "-" else None
+
+    generate_dataset(dir_path, num_clients, niid, balance, partition)

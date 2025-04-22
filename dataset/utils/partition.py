@@ -4,6 +4,8 @@ import math
 import warnings
 from abc import abstractmethod, ABCMeta
 import random
+from functools import wraps
+
 import networkx as nx
 import numpy as np
 import collections
@@ -21,6 +23,22 @@ def classify_label(dataset, num_classes: int):
     for idx, datum in enumerate(dataset):
         list1[datum[1]].append(idx)
     return list1
+index_func=lambda X:[xi[-1] for xi in X]
+
+# 装饰器函数
+def calculate_sample_stats(func):
+    @wraps(func)
+    def wrapper(self, data):
+        local_datas = func(self, data)
+        distribution = []
+        for local_data in local_datas:
+            distribution.append(data.get_distribution(local_data))
+        X = [[data[idx][0] for idx in idxes] for c, idxes in enumerate(local_datas)]
+        Y = [[data[idx][1] for idx in idxes] for c, idxes in enumerate(local_datas)]
+        # 返回 local_datas 和统计量
+        return (X, Y), distribution
+    return wrapper
+
 
 class AbstractPartitioner(metaclass=ABCMeta):
     @abstractmethod
@@ -32,14 +50,20 @@ class BasicPartitioner(AbstractPartitioner):
     task generator of different benchmarks. By overwriting __call__ method, different partitioners
     can be realized. The input of __call__ is usually a dataset.
     """
-    def __call__(self, *args, **kwargs):
+    def __init__(self, num_clients=100, num_per=None):
+        self.num_per = num_per
+        self.num_clients = num_clients
         return
 
-    def register_generator(self, generator):
-        r"""Register the generator as an self's attribute"""
-        self.generator = generator
-
-    # def local_imbalance_generator(self):
+    def get_info(self):
+        class_name = self.__class__.__name__
+        attributes = {}
+        for attr in vars(self):
+            value = getattr(self, attr)
+            if value:
+                attributes[attr](str(value))
+        attributes_str = '_'.join(f'{k}={v}' for k, v in attributes.items())
+        return f"{class_name}_{attributes_str}"
 
     def data_imbalance_generator(self, num_clients, datasize, imbalance=0, minvol=1):
         r"""
@@ -122,14 +146,9 @@ class BasicPartitioner(AbstractPartitioner):
         return samples_per_client
 
 class IIDPartitioner(BasicPartitioner):
-    """`Partition the indices of samples in the original dataset indentically and independently.
-
-    Args:
-        num_clients (int, optional): the number of clients
-        imbalance (float, optional): the degree of imbalance of the amounts of different local data (0<=imbalance<=1)
-    """
-    def __init__(self, num_clients=100, imbalance=0):
-        self.num_clients = num_clients
+    sign = 'IID'
+    def __init__(self, imbalance=0, **kwargs):
+        super().__init__(**kwargs)
         self.imbalance = imbalance
 
     def __str__(self):
@@ -137,36 +156,20 @@ class IIDPartitioner(BasicPartitioner):
         if self.imbalance > 0: name += '_imb{:.1f}'.format(self.imbalance)
         return name
 
-    def __call__(self, data, samples_per_client=None):
-        # cls_num = {}
-        # for _, cls in data:
-        #     if cls not in cls_num:
-        #         cls_num[cls] = 0
-        #     cls_num[cls] += 1
-        # for cls, num in cls_num.items():
-        #     print(f"Class {cls} has {num} samples")
-
-        if samples_per_client is None:
-            samples_per_client = self.data_imbalance_generator(self.num_clients, len(data), self.imbalance)
+    @calculate_sample_stats
+    def __call__(self, data):
+        if self.num_per is None:
+            self.num_per = self.data_imbalance_generator(self.num_clients, len(data), self.imbalance)
 
         d_idxs = np.random.permutation(len(data))
-        local_datas = np.split(d_idxs, np.cumsum(samples_per_client))[:-1]
+        local_datas = np.split(d_idxs, np.cumsum(self.num_per))[:-1]
         local_datas = [di.tolist() for di in local_datas]
         return local_datas
 
 class DirichletPartitioner(BasicPartitioner):
-    """`Partition the indices of samples in the original dataset according to Dirichlet distribution of the
-    particular attribute. This way of partition is widely used by existing works in federated learning.
-
-    Args:
-        num_clients (int, optional): the number of clients
-        alpha (float, optional): `alpha`(i.e. alpha>=0) in Dir(alpha*p) where p is the global distribution. The smaller alpha is, the higher heterogeneity the data is.
-        imbalance (float, optional): the degree of imbalance of the amounts of different local data (0<=imbalance<=1)
-        error_bar (float, optional): the allowed error when the generated distribution mismatches the distirbution that is actually wanted, since there may be no solution for particular imbalance and alpha.
-        index_func (func, optional): to index the distribution-dependent (i.e. label) attribute in each sample.
-    """
-    def __init__(self, num_clients=100, alpha=1.0, error_bar=1e-6, imbalance=0, index_func=lambda X:[xi[-1] for xi in X], minvol=1):
-        self.num_clients = num_clients
+    sign = 'Dir'
+    def __init__(self, alpha=1.0, error_bar=1e-6, imbalance=0, minvol=1, **kwargs):
+        super().__init__(**kwargs)
         self.alpha = alpha
         self.imbalance = imbalance
         self.index_func = index_func
@@ -178,11 +181,12 @@ class DirichletPartitioner(BasicPartitioner):
         if self.imbalance > 0: name += '_imb{:.1f}'.format(self.imbalance)
         return name
 
-    def __call__(self, data, samples_per_client=None):
+    @calculate_sample_stats
+    def __call__(self, data):
+        global alter_norms
         attrs = self.index_func(data)
-        num_attrs = len(set(attrs))
-        if samples_per_client is None:
-            samples_per_client = self.data_imbalance_generator(self.num_clients, len(data), self.imbalance, minvol=self.minvol)
+        if self.num_per is None:
+            self.num_per = self.data_imbalance_generator(self.num_clients, len(data), self.imbalance, minvol=self.minvol)
         # count the label distribution
         lb_counter = collections.Counter(attrs)
         lb_names = list(lb_counter.keys())
@@ -194,7 +198,7 @@ class DirichletPartitioner(BasicPartitioner):
         proportions = [np.random.dirichlet(self.alpha * p) for _ in range(self.num_clients)]
         while np.any(np.isnan(proportions)):
             proportions = [np.random.dirichlet(self.alpha * p) for _ in range(self.num_clients)]
-        sorted_cid_map = {k: i for k, i in zip(np.argsort(samples_per_client), [_ for _ in range(self.num_clients)])}
+        sorted_cid_map = {k: i for k, i in zip(np.argsort(self.num_per), [_ for _ in range(self.num_clients)])}
         error_increase_interval = 500
         max_error = self.error_bar
         loop_count = 0
@@ -205,7 +209,7 @@ class DirichletPartitioner(BasicPartitioner):
                 loop_count = 0
                 max_error = max_error * 10
             # generate dirichlet distribution till ||E(proportion) - P(D)||<=1e-5*self.num_classes
-            mean_prop = np.sum([pi * di for pi, di in zip(proportions, samples_per_client)], axis=0)
+            mean_prop = np.sum([pi * di for pi, di in zip(proportions, self.num_per)], axis=0)
             mean_prop = mean_prop / mean_prop.sum()
             error_norm = ((mean_prop - p) ** 2).sum()
             if crt_error - error_norm >= max_error:
@@ -216,14 +220,14 @@ class DirichletPartitioner(BasicPartitioner):
             excid = sorted_cid_map[crt_id]
             crt_id = (crt_id + 1) % self.num_clients
             sup_prop = [np.random.dirichlet(self.alpha * p) for _ in range(self.num_clients)]
-            del_prop = np.sum([pi * di for pi, di in zip(proportions, samples_per_client)], axis=0)
-            del_prop -= samples_per_client[excid] * proportions[excid]
+            del_prop = np.sum([pi * di for pi, di in zip(proportions, self.num_per)], axis=0)
+            del_prop -= self.num_per[excid] * proportions[excid]
             for i in range(error_increase_interval - loop_count):
                 alter_norms = []
                 for cid in range(self.num_clients):
                     if np.any(np.isnan(sup_prop[cid])):
                         continue
-                    alter_prop = del_prop + samples_per_client[excid] * sup_prop[cid]
+                    alter_prop = del_prop + self.num_per[excid] * sup_prop[cid]
                     alter_prop = alter_prop / alter_prop.sum()
                     error_alter = ((alter_prop - p) ** 2).sum()
                     alter_norms.append(error_alter)
@@ -237,7 +241,7 @@ class DirichletPartitioner(BasicPartitioner):
         self.dirichlet_dist = []  # for efficiently visualizing
         for lb in lb_names:
             lb_idxs = lb_dict[lb]
-            lb_proportion = np.array([pi[lb_names.index(lb)] * si for pi, si in zip(proportions, samples_per_client)])
+            lb_proportion = np.array([pi[lb_names.index(lb)] * si for pi, si in zip(proportions, self.num_per)])
             lb_proportion = lb_proportion / lb_proportion.sum()
             lb_proportion = (np.cumsum(lb_proportion) * len(lb_idxs)).astype(int)[:-1]
             lb_datas = np.split(lb_idxs, lb_proportion)
@@ -261,7 +265,6 @@ class DirichletPartitioner(BasicPartitioner):
         self.local_datas = local_datas
         return local_datas
 
-
 class SimpleDirichletPartitioner(BasicPartitioner):
     """`Partition the indices of samples in the original dataset according to Dirichlet distribution of the
     particular attribute. This way of partition is widely used by existing works in federated learning.
@@ -273,19 +276,20 @@ class SimpleDirichletPartitioner(BasicPartitioner):
         error_bar (float, optional): the allowed error when the generated distribution mismatches the distirbution that is actually wanted, since there may be no solution for particular imbalance and alpha.
         index_func (func, optional): to index the distribution-dependent (i.e. label) attribute in each sample.
     """
-    def __init__(self, num_clients=100, alpha=1.0, index_func=lambda X:[xi[-1] for xi in X], minvol=10):
-        self.num_clients = num_clients
+    sign = 'SimDir'
+    def __init__(self, alpha=1.0, minvol=10, **kwargs):
+        super().__init__(**kwargs)
         self.alpha = alpha
-        self.index_func = index_func
         self.minvol = minvol
 
     def __str__(self):
         name = "dir{:.2f}_err".format(self.alpha)
         return name
 
+    @calculate_sample_stats
     def __call__(self, data, samples_per_client=None):
         global idx_per_client
-        attrs = self.index_func(data)
+        attrs = index_func(data)
         num_attrs = len(set(attrs))
         num_labels = len(attrs)
         alpha = self.alpha
@@ -314,21 +318,11 @@ class SimpleDirichletPartitioner(BasicPartitioner):
         return local_datas
 
 class ExDirichletPartitioner(BasicPartitioner):
-    """`Partition the indices of samples in the original dataset according to Dirichlet distribution of the
-    particular attribute. This way of partition is widely used by existing works in federated learning.
-
-    Args:
-        num_clients (int, optional): the number of clients
-        alpha (float, optional): `alpha`(i.e. alpha>=0) in Dir(alpha*p) where p is the global distribution. The smaller alpha is, the higher heterogeneity the data is.
-        imbalance (float, optional): the degree of imbalance of the amounts of different local data (0<=imbalance<=1)
-        error_bar (float, optional): the allowed error when the generated distribution mismatches the distirbution that is actually wanted, since there may be no solution for particular imbalance and alpha.
-        index_func (func, optional): to index the distribution-dependent (i.e. label) attribute in each sample.
-    """
-
-    def __init__(self, num_clients=100, alpha=1.0, diversity=0.5, index_func=lambda X: [xi[-1] for xi in X], minvol=10):
-        self.num_clients = num_clients
+    sign = 'ExDir'
+    def __init__(self, alpha=1.0, cls_per=-1, minvol=10, **kwargs):
+        super().__init__(**kwargs)
         self.alpha = alpha
-        self.diversity = diversity
+        self.cls_per = cls_per
         self.index_func = index_func
         self.minvol = minvol
 
@@ -343,7 +337,7 @@ class ExDirichletPartitioner(BasicPartitioner):
         '''
         global clientidx_map
         min_size_per_class = 0
-        C = int(self.diversity * num_classes)
+        C = num_classes if self.cls_per == -1 else min(num_classes, max(self.cls_per, 1))
         min_require_size_per_class = max(C * num_clients // num_classes // 5, 1)
         while min_size_per_class < min_require_size_per_class:
             clientidx_map = { k: [] for k in range(num_classes) }
@@ -354,6 +348,7 @@ class ExDirichletPartitioner(BasicPartitioner):
             min_size_per_class = min([len(clientidx_map[k]) for k in range(num_classes)])
         return clientidx_map
 
+    @calculate_sample_stats
     def __call__(self, data, samples_per_client=None):
         global idx_per_client
         attrs = self.index_func(data)
@@ -404,46 +399,20 @@ class ExDirichletPartitioner(BasicPartitioner):
 
         return local_datas
 
-
-class DiversityPartitioner(BasicPartitioner):
-    """
-    Partition the indices of samples in the original dataset according to numbers of types of a particular
-    attribute (e.g. label).
-    This version supports after initial partition:
-    1) Trimming and supplementing considering local category distribution.
-    2) Maintaining a global assignment tracker.
-    3) Ensuring diversity first and th  en trying to meet samples_per_client.
-    """
-
-    def __init__(self, num_clients=100, diversity=1.0, index_func=lambda X:[xi[-1] for xi in X],
-                 imbalance=0.0, disturbance_factor=1.0):
-        """
-        Args:
-            num_clients (int): 客户端数量
-            diversity (float): 多样性比例
-            index_func (callable): 从数据中获取类别的方法
-            imbalance (float): 不平衡度参数（用于生成samples_per_client）
-            disturbance_factor (float): 扰动因子，用于控制目标分布的类型
-                                       0.0表示期望本地分布为均匀分布
-                                       1.0表示期望本地分布与全局分布一致
-                                       中间值表示在两者之间加权
-        """
-        self.num_clients = num_clients
-        self.diversity = diversity
-        self.index_func = index_func
+class PathologyPartitioner(BasicPartitioner):
+    sign = 'Pathology'
+    def __init__(self, cls_per=-1, imbalance=0.0, disturb=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.cls_per = cls_per
         self.imbalance = imbalance
-        self.disturbance_factor = disturbance_factor
+        self.disturb = disturb
 
-    def __str__(self):
-        name = "div{:.1f}".format(self.diversity)
-        return name
-
-
+    @calculate_sample_stats
     def __call__(self, data, samples_per_client=None):
-        labels = self.index_func(data)
+        labels = index_func(data)
         dpairs = [[did, lb] for did, lb in zip(range(len(data)), labels)]
         num_classes = len(set(labels))
-        num = max(int(self.diversity * num_classes), 1)
+        num = num_classes if self.cls_per == -1 else min(num_classes, max(self.cls_per, 1))
         K = num_classes
 
         if samples_per_client is None:
@@ -459,7 +428,7 @@ class DiversityPartitioner(BasicPartitioner):
         # 当disturbance_factor=1，期望分布为global_distribution
         # 否则在两者之间线性插值
         ideal_distribution = [
-            self.disturbance_factor * global_distribution[c] + (1 - self.disturbance_factor)*(1.0/num_classes)
+            self.disturb * global_distribution[c] + (1 - self.disturb)*(1.0/num_classes)
             for c in range(num_classes)
         ]
 
@@ -622,9 +591,9 @@ class DiversityPartitioner(BasicPartitioner):
                 global_assigned_count[max_cat] -= 1
         return local_datas
 
-
-class DirectPartitioner(BasicPartitioner):
-    def __init__(self, samples_per_client, labels_per_client, index_func=lambda X: [xi[-1] for xi in X], minvol=1, alpha=1.0):
+class CustomPartitioner(BasicPartitioner):
+    sign = 'Custom'
+    def __init__(self, num_map, cls_map, minvol=1, **kwargs):
         """
         Args:
             samples_per_client (list or tuple): 每个客户端需要的样本数列表，长度为num_clients
@@ -635,16 +604,17 @@ class DirectPartitioner(BasicPartitioner):
             minvol (int): 每个客户端的数据量下限
             alpha (float): Dirichlet分布参数，用来控制该客户端内部各标签样本量的分布不均匀性
         """
-        assert len(samples_per_client) == len(labels_per_client)
-        self.samples_per_client = samples_per_client
-        self.labels_per_client = labels_per_client
-        self.num_clients = len(samples_per_client)
-        self.index_func = index_func
+        super().__init__(**kwargs)
+        assert not cls_map or not num_map
+        assert len(cls_map) == len(num_map)
+        self.cls_map = cls_map
+        self.num_map = num_map
         self.minvol = minvol
-        self.alpha = alpha
 
+    @calculate_sample_stats
     def __call__(self, data):
-        labels = self.index_func(data)
+        global counts
+        labels = index_func(data)
         unique_labels = list(set(labels))
         unique_labels.sort()
         num_classes = len(unique_labels)
@@ -660,7 +630,7 @@ class DirectPartitioner(BasicPartitioner):
         # 将labels_per_client分为两类：一类客户端有确定的标签集合，一类只有标签数量需求
         client_label_sets_fixed = {}
         client_label_nums = {}
-        for cid, req in enumerate(self.labels_per_client):
+        for cid, req in enumerate(self.cls_map):
             if isinstance(req, int):
                 client_label_nums[cid] = req
             else:
@@ -700,9 +670,8 @@ class DirectPartitioner(BasicPartitioner):
         # 至此，每个客户端都有了最终的标签集合（包含从已确定或分配得来的标签类）
         local_datas = [[] for _ in range(self.num_clients)]
 
-        # 使用Dirichlet分布为每个客户端分配标签内的样本比例
         for cid in range(self.num_clients):
-            needed = self.samples_per_client[cid]
+            needed = self.num_map[cid]
             chosen_label_ids = contain[cid]
             chosen_labels = [unique_labels[i] for i in chosen_label_ids]
             num_c_labels = len(chosen_labels)
@@ -712,12 +681,13 @@ class DirectPartitioner(BasicPartitioner):
                 else:
                     continue
 
-            # 根据alpha使用Dirichlet分布生成该客户端的标签分配比例
-            dir_params = [self.alpha]*num_c_labels
-            proportions = np.random.dirichlet(dir_params)
-            counts = (proportions * needed).astype(int)
-            diff = needed - counts.sum()
-            counts[-1] += diff  # 确保分配总和为needed
+            # 直接平均分配每个标签的样本
+            if num_c_labels > 0:
+                counts = [needed // num_c_labels] * num_c_labels
+                # 处理余数
+                remainder = needed % num_c_labels
+                for i in range(remainder):
+                    counts[i] += 1
 
             allocated = 0
             assignment = []
@@ -778,7 +748,7 @@ class DirectPartitioner(BasicPartitioner):
 
         return local_datas
 
-class GlobalTailPartitioner(BasicPartitioner):
+class LongTailPartitioner:
     """Partition the indices of samples in the original dataset with optional ordering of classes.
 
     Args:
@@ -789,62 +759,47 @@ class GlobalTailPartitioner(BasicPartitioner):
         class_order_mode (str): the mode of class ordering, in {'normal', 'reverse', 'random', 'given'}
         given_class_order (list[int]): a user-specified class order if class_order_mode='given'
     """
-
-    def __init__(self, partitioner_het, type='exp', imb_factor=0.01,
-                 index_func=lambda X: [xi[-1] for xi in X],
-                 class_order_mode='normal',
-                 given_class_order=None):
-        self.type = type
+    sign = 'LongTail'
+    def __init__(self, partitioner, imb_type='exp', imb_factor=0.01, cls_order='random'):
+        super().__init__()
+        self.imb_type = imb_type
         self.imb_factor = imb_factor
-        self.index_func = index_func
-        self.p1 = partitioner_het
-        self.class_order_mode = class_order_mode
-        self.given_class_order = given_class_order
+        self.partitioner = partitioner
+        self.cls_order = cls_order
 
     def __str__(self):
-        name = "type{} div{:.1f}".format(self.type, self.imb_factor)
+        name = "imb_type{} imb_factor{:.1f}".format(self.imb_type, self.imb_factor)
         return name
-
-    def __getattr__(self, name):
-        """
-        当在本类实例中找不到该属性时，会自动转向 self.p1 来获取属性。
-        因为 __getattr__ 只有在属性不存在于实例时才被调用，因此不需要担心重复检查。
-        """
-        # 直接委托给p1
-        return getattr(self.p1, name)
 
     def _get_class_order(self, num_classes):
         # 根据模式来确定类的顺序
-        if self.class_order_mode == 'normal':
+        if self.cls_order == 'positive':
             class_order = list(range(num_classes))
-        elif self.class_order_mode == 'reverse':
+        elif self.cls_order == 'reverse':
             class_order = list(range(num_classes))[::-1]
-        elif self.class_order_mode == 'random':
+        elif self.cls_order == 'random':
             class_order = list(range(num_classes))
             np.random.shuffle(class_order)
-        elif self.class_order_mode == 'given':
-            if self.given_class_order is not None and len(self.given_class_order) == num_classes:
-                class_order = self.given_class_order
-            else:
-                raise ValueError(
-                    "given_class_order must be provided and match num_classes when class_order_mode='given'")
+        elif self.cls_order is list and len(self.cls_order) == num_classes:
+            class_order = self.cls_order
         else:
-            raise ValueError("Unsupported class_order_mode: {}".format(self.class_order_mode))
+            raise ValueError("Unsupported class_order_mode: {}".format(self.cls_order))
         return class_order
 
+    @calculate_sample_stats
     def __call__(self, data):
-        labels = self.index_func(data)
+        labels = index_func(data)
         num_classes = len(set(labels))
         # 获取标签-样本字典
         list_label2indices = classify_label(data, num_classes)
         img_max = len(labels) / num_classes
         img_num_per_cls = []
         # 根据不平衡类型计算各类的样本数
-        if self.type == 'exp':  # 指数型长尾
+        if self.imb_type == 'exp':  # 指数型长尾
             for _classes_idx in range(num_classes):
                 num = img_max * (self.imb_factor ** (_classes_idx / (num_classes - 1.0)))
                 img_num_per_cls.append(int(num))
-        elif self.type == 'step':  # 阶梯型不平衡，前半类数目较多，后半类数目较少
+        elif self.imb_type == 'step':  # 阶梯型不平衡，前半类数目较多，后半类数目较少
             half_num = num_classes // 2
             for cls_idx in range(half_num):
                 img_num_per_cls.append(int(img_max))
@@ -871,367 +826,20 @@ class GlobalTailPartitioner(BasicPartitioner):
         # 打乱重新选择后的数据对
         np.random.shuffle(new_dpairs)
         # 利用 partitioner_het 对 new_dpairs 进行异构划分
-        local_datas = self.p1(new_dpairs)
+        local_datas = self.partitioner(new_dpairs)
 
         return local_datas
-
-class LocalTailPartitioner(BasicPartitioner):
-    """
-    A more reasoned local long-tail partitioner:
-    1. Compute global distribution p.
-    2. Sort classes by global proportion.
-    3. Generate a set of class orders with different patterns, not purely random.
-    4. Assign each client one order, ensuring overall diversity and possible symmetry.
-    5. Construct tail distributions, scale them to match global p.
-    """
-
-    def __init__(self, num_clients, imb_factor=0.01,
-                 index_func=lambda X: [xi[-1] for xi in X]):
-        self.num_clients = num_clients
-        self.imb_factor = imb_factor
-        self.index_func = index_func
-
-    def __str__(self):
-        return "LocalTail div{:.3f}".format(self.imb_factor)
-
-    def _generate_strategic_class_orders(self, sorted_classes, num_clients):
-        """
-        Generate class orders based on sorted_classes (from largest p to smallest p).
-        We create a small set of patterned orders to ensure diversity:
-        1. base = sorted_classes (largest->smallest)
-        2. reverse = reversed of base
-        3. half swap (front and back half exchange)
-        4. middle segment reversal
-        5. slight perturbation on base
-
-        If more sequences needed, randomly shuffle base with constraints until we have enough.
-        We can also ensure symmetrical pairs if needed (if all clients have same sample count).
-        """
-
-        num_classes = len(sorted_classes)
-        orders = []
-
-        base = sorted_classes[:]
-        orders.append(base[:])  # base
-        orders.append(base[::-1])  # reverse
-
-        half = num_classes // 2
-        if num_classes > 2:
-            swapped = base[half:] + base[:half]  # half-swap
-            orders.append(swapped)
-            # Middle segment reversal
-            mid = num_classes // 3
-            partial = base[:mid] + base[mid:2*mid][::-1] + base[2*mid:]
-            orders.append(partial)
-
-        # Slight perturbation of base
-        perturbed = base[:]
-        for i in range(len(perturbed)):
-            if i < len(perturbed)//2 and random.random() < 0.5:
-                pos = i + random.randint(1, min(2, num_classes - i - 1))
-                perturbed[i], perturbed[pos] = perturbed[pos], perturbed[i]
-        orders.append(perturbed)
-
-        # If not enough, add random shuffles of base until we have at least num_clients
-        seen = set(tuple(o) for o in orders)
-        while len(orders) < num_clients:
-            new_seq = base[:]
-            random.shuffle(new_seq)
-            if tuple(new_seq) not in seen:
-                orders.append(new_seq)
-                seen.add(tuple(new_seq))
-
-        # If we want symmetry when all clients have the same samples,
-        # we could pair sequences with their reverse here.
-        # For simplicity, omitted. Add logic if needed.
-
-        # Now we have at least num_clients sequences
-        random.shuffle(orders)
-        return orders[:num_clients]
-
-    def __call__(self, data):
-        labels = self.index_func(data)
-        num_classes = len(set(labels))
-        total = len(data)
-        class_counts = [labels.count(c) for c in range(num_classes)]
-        p = [cnt / total for cnt in class_counts]
-
-        # Sort classes by global proportion descending
-        classes_by_global = list(range(num_classes))
-        classes_by_global.sort(key=lambda c: p[c], reverse=True)
-
-        # Group data by class
-        data_by_class = {c: [] for c in range(num_classes)}
-        for idx, lb in enumerate(labels):
-            data_by_class[lb].append(idx)
-
-        # Shuffle each class subset
-        for c in range(num_classes):
-            np.random.shuffle(data_by_class[c])
-
-        # Samples per client
-        per_client = total // self.num_clients
-        remainder = total % self.num_clients
-        client_sample_counts = [per_client] * self.num_clients
-        for i in range(remainder):
-            client_sample_counts[i] += 1
-
-        # Generate strategic class orders
-        client_class_orders = self._generate_strategic_class_orders(classes_by_global, self.num_clients)
-
-        # Construct tail distributions T_i
-        # T_i[c_order[j]] ∝ imb_factor^(j/(K-1))
-        # Then normalized
-        T = []
-        for i in range(self.num_clients):
-            if num_classes > 1:
-                tail_values = [self.imb_factor ** (j / (num_classes - 1)) for j in range(num_classes)]
-            else:
-                # If only one class, tail_values = [1.0]
-                tail_values = [1.0]
-            tail_sum = sum(tail_values)
-            Ti = [x / tail_sum for x in tail_values]
-            T.append(Ti)
-
-        # Map T back to global class indices
-        T_matrix = np.zeros((self.num_clients, num_classes))
-        for i in range(self.num_clients):
-            order = client_class_orders[i]
-            for j, c_ in enumerate(order):
-                T_matrix[i, c_] = T[i][j]
-
-        T_avg = T_matrix.mean(axis=0)
-
-        # Compute scaling factors S
-        S = []
-        for c in range(num_classes):
-            if T_avg[c] == 0:
-                if p[c] > 0:
-                    S.append(10.0)
-                else:
-                    S.append(1.0)
-            else:
-                S.append(p[c] / T_avg[c])
-
-        # Scale L_i
-        L = []
-        for i in range(self.num_clients):
-            order = client_class_orders[i]
-            current_vec = np.zeros(num_classes)
-            for j, c_ in enumerate(order):
-                current_vec[c_] = T[i][j]
-
-            L_prime = current_vec * S
-            sum_L_prime = L_prime.sum()
-            L_i = L_prime / sum_L_prime
-            L.append(L_i)
-
-        # Allocate samples
-        local_datas = [[] for _ in range(self.num_clients)]
-        class_offsets = {c: 0 for c in range(num_classes)}
-        for i in range(self.num_clients):
-            needed_i = client_sample_counts[i]
-            assigned_counts = np.round(L[i] * needed_i).astype(int)
-            diff = needed_i - assigned_counts.sum()
-            if diff != 0:
-                assigned_counts[-1] += diff
-
-            for c in range(num_classes):
-                cnt = assigned_counts[c]
-                start = class_offsets[c]
-                local_datas[i].extend(data_by_class[c][start:start + cnt])
-                class_offsets[c] += cnt
-
-        return local_datas
-
-
-class GaussianPerturbationPartitioner(BasicPartitioner):
-    """`Partition the indices of samples I.I.D. and bind additional and static gaussian noise to each sample, which is
-    a setting of feature skew in federated learning.
-
-    Args:
-        num_clients (int, optional): the number of clients
-        imbalance (float, optional): the degree of imbalance of the amounts of different local data (0<=imbalance<=1)
-        sigma (float, optional): the degree of feature skew
-        scale (float, optional): the standard deviation of noise
-        index_func (int, optional): the index of the feature to be processed for each sample.
-    """
-    def __init__(self, num_clients=100, imbalance=0.0, sigma=0.1, scale=0.1, index_func=lambda X:[xi[0] for xi in X]):
-        self.num_clients = num_clients
-        self.imbalance = imbalance
-        self.sigma = sigma
-        self.scale = scale
-        self.index_func = index_func
-
-    def __str__(self):
-        name = "perturb_gs{:.1f}_{:.1f}".format(self.sigma, self.scale)
-        if self.imbalance > 0: name += '_imb{:.1f}'.format(self.imbalance)
-        return name
-
-    def __call__(self, data):
-        shape = tuple(np.array(self.index_func(data)[0].shape))
-        samples_per_client = self.data_imbalance_generator(self.num_clients, len(data), self.imbalance)
-        d_idxs = np.random.permutation(len(data))
-        local_datas = np.split(d_idxs, np.cumsum(samples_per_client))[:-1]
-        local_datas = [di.tolist() for di in local_datas]
-        local_perturbation_means = [np.random.normal(0, self.sigma, shape) for _ in range(self.num_clients)]
-        local_perturbation_stds = [self.scale * np.ones(shape) for _ in range(self.num_clients)]
-        local_perturbation = []
-        for cid in range(self.num_clients):
-            c_perturbation = [np.random.normal(local_perturbation_means[cid], local_perturbation_stds[cid]).tolist() for
-                              _ in range(len(local_datas[cid]))]
-            local_perturbation.append(c_perturbation)
-        self.local_perturbation = local_perturbation
-        return local_datas
-
-class IDPartitioner(BasicPartitioner):
-    """`Partition the indices of samples I.I.D. according to the ID of each sample, which requires the passed parameter
-    `data` has attribution `id`.
-
-    Args:
-        num_clients (int, optional): the number of clients
-        priority (str, optional): The value should be in set ('random', 'max', 'min'). If the number of clients is smaller than the total number of all the clients, this term will decide the selected clients according to their local data sizes.
-    """
-    def __init__(self, num_clients=-1, priority='random', index_func=lambda X:X.id):
-        self.num_clients = int(num_clients)
-        self.priorty = priority
-        self.index_func = index_func
-
-    def __str__(self):
-        return 'id'
-
-    def __call__(self, data):
-        all_data = list(range(len(data)))
-        data_owners = self.index_func(data)
-        local_datas = collections.defaultdict(list)
-        for idx in range(len(all_data)):
-            local_datas[data_owners[idx]].append(idx)
-        local_datas = list(local_datas.values())
-        if self.num_clients < 0:
-            self.num_clients = len(local_datas)
-        elif self.priorty == 'max':
-            local_datas = sorted(local_datas, key=lambda x: len(x), reverse=True)[:self.num_clients]
-        elif self.priorty == 'min':
-            local_datas = sorted(local_datas, key=lambda x: len(x))[:self.num_clients]
-        elif self.priorty == 'random':
-            random.shuffle(local_datas)
-            local_datas = local_datas[:self.num_clients]
-        # local_datas = sorted(local_datas, key=lambda x:data[x[0]][] if self.index_func is not None else data.id[x[0]])
-        return local_datas
-
-class VerticalSplittedPartitioner(BasicPartitioner):
-    """`Partition the indices and shapes of samples in the original dataset for vertical federated learning. Different
-    to the above partitioners, the partitioner.__call__ returns more flexible partition information instead of the indices that
-    can be used to rebuild the partitioned data.
-
-    Args:
-        num_parties (int, optional): the number of parties
-        imbalance (float, optional): the degree of imbalance of the number of features
-        dim (int, optional): the dim of features to be partitioned
-    """
-    def __init__(self, num_parties=-1, imbalance=0, dim=-1):
-        self.num_parties = int(num_parties)
-        self.imbalance = imbalance
-        self.feature_pointers = []
-        self.dim = dim
-
-    def __str__(self):
-        return 'vertical_splitted_IBM{}'.format(self.imbalance)
-
-    def __call__(self, data):
-        local_datas = []
-        feature = data[0][0]
-        shape = feature.shape
-        if self.dim == -1: self.dim = int(np.argmax(shape))
-        self.num_parties = min(shape[self.dim], self.num_parties)
-        feature_sizes = self.gen_feature_size(shape[self.dim], self.num_parties, self.imbalance)
-        for pid in range(self.num_parties):
-            pdata = {'sample_idxs': list(range(len(data))), 'pt_feature': (self.dim, feature_sizes, pid),
-                     'with_label': (pid == 0)}
-            local_datas.append(pdata)
-        return local_datas
-
-    def gen_feature_size(self, total_size, num_parties, imbalance=0):
-        size_partitions = []
-        size_gen = self.integer_k_partition(total_size, num_parties)
-        while True:
-            try:
-                tmp = next(size_gen)
-                if tmp is not None:
-                    size_partitions.append(tmp)
-            except StopIteration:
-                break
-        size_partitions = sorted(size_partitions, key=lambda x: np.std(x))
-        res = size_partitions[int(imbalance * (len(size_partitions) - 1))]
-        return res
-
-    def integer_k_partition(self, n, k, l=1):
-        '''n is the integer to partition, k is the length of partitions, l is the min partition element size'''
-        if k < 1:
-            return None
-        if k == 1:
-            if n >= l:
-                yield (n,)
-            return None
-        for i in range(l, n + 1):
-            for result in self.integer_k_partition(n - i, k - 1, i):
-                yield (i,) + result
-
-class NodeLouvainPartitioner(BasicPartitioner):
-    """
-    Partition a graph into several subgraph by louvain algorithms. The input
-    of this partitioner should be of type networkx.Graph
-    """
-    def __init__(self, num_clients=100):
-        self.num_clients = num_clients
-
-    def __str__(self):
-        name = "Louvain"
-        return name
-
-    def __call__(self, data):
-        r"""
-        Partition graph data by Louvain algorithm and similar nodes (i.e. being of the same community) will be
-        allocated one client.
-        Args:
-            data (networkx.Graph):
-        Returns:
-            local_nodes (List): the local nodes id owned by each client (e.g. [[1,2], [3,4]])
-        """
-        local_nodes = [[] for _ in range(self.num_clients)]
-        self.node_groups = community.community_louvain.best_partition(data)
-        groups = collections.defaultdict(list)
-        for ni, gi in self.node_groups.items():
-            groups[gi].append(ni)
-        groups = {k: groups[k] for k in list(range(len(groups)))}
-        # ensure the number of groups is larger than the number of clients
-        while len(groups) < self.num_clients:
-            # find the group with the largest size
-            groups_lens = [groups[k] for k in range(len(groups))]
-            max_gi = np.argmax(groups_lens)
-            # set the size of the new group
-            min_glen = min(groups_lens)
-            max_glen = max(groups_lens)
-            if max_glen < 2 * min_glen: min_glen = max_glen // 2
-            # split the group with the largest size into two groups
-            nodes_in_gi = groups[max_gi]
-            new_group_id = len(groups)
-            groups[new_group_id] = nodes_in_gi[:min_glen]
-            groups[max_gi] = nodes_in_gi[min_glen:]
-        # allocate different groups to clients
-        groups_lens = [len(groups[k]) for k in range(len(groups))]
-        group_ids = np.argsort(groups_lens)
-        for gi in group_ids:
-            cid = np.argmin([len(li) for li in local_nodes])
-            local_nodes[cid].extend(groups[gi])
-        return local_nodes
 
 # 边缘-本地两阶段划分
-class BasicHierPartitioner(BasicPartitioner):
-    def __init__(self, partitioner_edge_server, partitioner_edge_client):
-        self.p1 = partitioner_edge_server
-        self.p2 = partitioner_edge_client
+class HierarchPartitioner:
+    def __init__(self, partitioner_cloud, partitioner_edge):
+        self.p1 = partitioner_cloud
+        self.p2 = partitioner_edge
 
+    def get_info(self):
+        return f"Hierarch-{self.p1.get_info()}-{self.p2.get_info()}"
+
+    @calculate_sample_stats
     def __call__(self, data):
         edge_servers_data = self.p1(data)
         res = []
@@ -1246,21 +854,22 @@ class BasicHierPartitioner(BasicPartitioner):
 
 
 # 样本量异构肯定是无法保证的，除非将其视作第三种异构属性
-class LabelDomainPartitioner(BasicPartitioner):
-    def __init__(self, partitioner_label, partitioner_domain,
-                 error_bar=1e-5, # 用于解决跨阶段的独立概率取整误差（逼近真实分布）
-                 index_func=lambda X: [xi[-1] for xi in X]):
+class LabelDomainPartitioner:
+    def __init__(self, partitioner_label, partitioner_domain):
         self.p1 = partitioner_label
         self.p2 = partitioner_domain # 下层划分器残参数已指定
-        self.index_func = index_func
 
+    def get_info(self):
+        return f"LabelDomain-{self.p1.get_info()}-{self.p2.get_info()}"
+
+    @calculate_sample_stats
     def __call__(self, data):
         local_data = {}
 
         # Step 1: 按类别划分
         print("Step 1: 按类别划分开始")
         data.set_mode('label')
-        labels = self.index_func(data)
+        labels = index_func(data)
         num_class = len(set(labels))
         print(f"总类别数: {num_class}")
 
@@ -1286,7 +895,7 @@ class LabelDomainPartitioner(BasicPartitioner):
         for cls in range(num_class): # 确保每个类别至少有 domain个
             data.set_mode('domain')
             data.set_retain({'label': [cls]})
-            domains = self.index_func(data)
+            domains = index_func(data)
             num_domain = len(set(domains))
             print(f"类别 {cls} 包含领域数: {num_domain} 总样本数 {len(domains)}")
             print(sample_per_client_domain[cls])

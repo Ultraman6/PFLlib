@@ -23,13 +23,13 @@ class Client(object):
         self.device = args.device
         self.id = id  # integer
         self.save_folder_name = args.save_folder_name
-
+        self.root = args.root
         self.num_classes = args.num_classes
         self.train_samples = train_samples
         self.test_samples = test_samples
 
-        train_labels = [label for _, label in read_client_data(self.dataset, self.id, is_train=True)]
-        test_labels = [label for _, label in read_client_data(self.dataset, self.id, is_train=False)]
+        train_labels = [label for _, label in read_client_data(self.root, self.dataset, self.id, is_train=True)]
+        test_labels = [label for _, label in read_client_data(self.root, self.dataset, self.id, is_train=False)]
         self.train_samples_by_class = {i: 0 for i in range(self.num_classes)}
         for label in train_labels: self.train_samples_by_class[label.item()] += 1
         self.test_samples_by_class = {i:0 for i in range(self.num_classes)}
@@ -63,13 +63,13 @@ class Client(object):
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
-        train_data = read_client_data(self.dataset, self.id, is_train=True)
+        train_data = read_client_data(self.root, self.dataset, self.id, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.id, is_train=False)
+        test_data = read_client_data(self.root, self.dataset, self.id, is_train=False)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
         
     def set_parameters(self, model):

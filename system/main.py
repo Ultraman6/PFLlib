@@ -239,7 +239,6 @@ def run(args):
         time_list.append(time.time()-start)
 
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
-    
 
     # Global average
     average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
@@ -253,7 +252,7 @@ if __name__ == "__main__":
     total_start = time.time()
 
     parser = argparse.ArgumentParser()
-    # general
+    parser.add_argument('--root', type=str, default=None)
     parser.add_argument('-go', "--goal", type=str, default="test", 
                         help="The goal for this experiment")
     parser.add_argument('-dev', "--device", type=str, default="cuda",
@@ -371,22 +370,7 @@ if __name__ == "__main__":
     if args.device == "cuda" and not torch.cuda.is_available():
         print("\ncuda is not avaiable.\n")
         args.device = "cpu"
-
-    # print("=" * 50)
-    # for arg in vars(args):
-    #     print(arg, '=',getattr(args, arg))
-    # print("=" * 50)
-
-    # with torch.profiler.profile(
-    #     activities=[
-    #         torch.profiler.ProfilerActivity.CPU,
-    #         torch.profiler.ProfilerActivity.CUDA],
-    #     profile_memory=True, 
-    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log')
-    #     ) as prof:
-    # with torch.autograd.profiler.profile(profile_memory=True) as prof:
+    if args.root is None:
+        from dataset.main import generate_dataset
+        args.root = generate_dataset(args.dataset)
     run(args)
-
-    
-    # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
-    # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

@@ -3,36 +3,51 @@ import ujson
 import numpy as np
 import gc
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
 from PIL import Image
+import torch
 
+class ConcatSet(ConcatDataset):
+    def __init__(self, *datasets):
+        super().__init__(datasets)
+        self._unique_labels = None
+        self._targets = None
 
-def check(config_path, train_path, test_path, num_clients, alpha, batch_size, niid=False,
-        balance=True, partition=None):
-    # check existing dataset
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            config = ujson.load(f)
-        if config['num_clients'] == num_clients and \
-            config['non_iid'] == niid and \
-            config['balance'] == balance and \
-            config['partition'] == partition and \
-            config['alpha'] == alpha and \
-            config['batch_size'] == batch_size:
-            print("\nDataset already generated.\n")
-            return True
+    @property
+    def unique_labels(self):
+        if self._unique_labels is None:
+            self._collect_labels()
+        return self._unique_labels
 
-    dir_path = os.path.dirname(train_path)
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-    dir_path = os.path.dirname(test_path)
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+    @property
+    def targets(self):
+        if self._targets is None:
+            self._collect_labels()
+        return self._targets
 
-    return False
+    def _collect_labels(self):
+        all_labels = []
+        for data in self:  # 这里调用了 __iter__ 方法
+            _, label = data
+            all_labels.append(label)
+        all_labels = torch.tensor(all_labels)
+        self._unique_labels = torch.unique(all_labels)
+        self._targets = all_labels
 
-def separate_data(data, num_clients, num_classes, niid, batch_size, train_ratio, alpha, balance=False, partition=None):
-    global class_per_client
+    def get_distribution(self, indices):
+        # 检查索引是否有效
+        if any(idx < 0 or idx >= len(self) for idx in indices):
+            raise IndexError("Indices out of range.")
+        counts = torch.bincount(self.targets[indices], minlength=len(self.unique_labels))
+        distribution_dict = {label.item(): count.item() for label, count in zip(self.unique_labels, counts)}
+        return distribution_dict
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
+def separate_data(data, num_clients, num_classes, niid, batch_size, train_ratio, alpha,
+                  class_per_client, balance=False, partition=None):
     X = [[] for _ in range(num_clients)]
     y = [[] for _ in range(num_clients)]
     statistic = [[] for _ in range(num_clients)]
@@ -200,8 +215,9 @@ def separate_data(data, num_clients, num_classes, niid, batch_size, train_ratio,
     return X, y, statistic
 
 # 切割数据（训练/测试）
-def split_data(X, y, train_ratio):
+def split_data(data, train_ratio):
     # Split dataset
+    X, y = data
     train_data, test_data = [], []
     num_samples = {'train':[], 'test':[]}
     # 划分每个客户的训练集和测试集
@@ -223,30 +239,19 @@ def split_data(X, y, train_ratio):
 
     return train_data, test_data
 
-def save_file(config_path, train_path, test_path, train_data, test_data, num_clients, 
-                num_classes, statistic, alpha, batch_size, niid=False, balance=True, partition=None):
-    config = {
-        'num_clients': num_clients, 
-        'num_classes': num_classes, 
-        'non_iid': niid, 
-        'balance': balance, 
-        'partition': partition, 
-        'Size of samples for labels in clients': statistic, 
-        'alpha': alpha, 
-        'batch_size': batch_size, 
-    }
-
-    # gc.collect()
+def save_file(path, train_data, test_data, distribution):
+    distribution_path = path + "distribution.json"
+    train_path = path + "train/"
+    test_path = path + "test/"
     print("Saving to disk.\n")
-
     for idx, train_dict in enumerate(train_data):
         with open(train_path + str(idx) + '.npz', 'wb') as f:
             np.savez_compressed(f, data=train_dict)
     for idx, test_dict in enumerate(test_data):
         with open(test_path + str(idx) + '.npz', 'wb') as f:
             np.savez_compressed(f, data=test_dict)
-    with open(config_path, 'w') as f:
-        ujson.dump(config, f)
+    with open(distribution_path, 'w') as f:
+        ujson.dump(distribution, f)
 
     print("Finish generating dataset.\n")
 

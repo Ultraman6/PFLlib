@@ -3,9 +3,9 @@ import os
 import torch
 
 
-def read_data(dataset, idx, is_train=True):
+def read_data(root, dataset, idx, is_train=True):
     if is_train:
-        train_data_dir = os.path.join('../dataset', dataset, 'train/')
+        train_data_dir = os.path.join(root, dataset, 'train/')
 
         train_file = train_data_dir + str(idx) + '.npz'
         with open(train_file, 'rb') as f:
@@ -14,7 +14,7 @@ def read_data(dataset, idx, is_train=True):
         return train_data
 
     else:
-        test_data_dir = os.path.join('../dataset', dataset, 'test/')
+        test_data_dir = os.path.join(root, dataset, 'test/')
 
         test_file = test_data_dir + str(idx) + '.npz'
         with open(test_file, 'rb') as f:
@@ -23,11 +23,11 @@ def read_data(dataset, idx, is_train=True):
         return test_data
 
 
-def read_client_data(dataset, idx, is_train=True):
+def read_client_data(root, dataset, idx, is_train=True):
     if "News" in dataset:
-        return read_client_data_text(dataset, idx, is_train)
+        return read_client_data_text(dataset, idx, is_train, root)
     elif "Shakespeare" in dataset:
-        return read_client_data_Shakespeare(dataset, idx)
+        return read_client_data_Shakespeare(dataset, idx, root)
 
     if is_train:
         train_data = read_data(dataset, idx, is_train)
@@ -44,9 +44,9 @@ def read_client_data(dataset, idx, is_train=True):
         return test_data
 
 
-def read_client_data_text(dataset, idx, is_train=True):
+def read_client_data_text(root, dataset, idx, is_train=True):
     if is_train:
-        train_data = read_data(dataset, idx, is_train)
+        train_data = read_data(dataset, idx, is_train, root)
         X_train, X_train_lens = list(zip(*train_data['x']))
         y_train = train_data['y']
 
@@ -57,7 +57,7 @@ def read_client_data_text(dataset, idx, is_train=True):
         train_data = [((x, lens), y) for x, lens, y in zip(X_train, X_train_lens, y_train)]
         return train_data
     else:
-        test_data = read_data(dataset, idx, is_train)
+        test_data = read_data(dataset, idx, is_train, root)
         X_test, X_test_lens = list(zip(*test_data['x']))
         y_test = test_data['y']
 
@@ -69,7 +69,7 @@ def read_client_data_text(dataset, idx, is_train=True):
         return test_data
 
 
-def read_client_data_Shakespeare(dataset, idx, is_train=True):
+def read_client_data_Shakespeare(root, dataset, idx, is_train=True):
     if is_train:
         train_data = read_data(dataset, idx, is_train)
         X_train = torch.Tensor(train_data['x']).type(torch.int64)
